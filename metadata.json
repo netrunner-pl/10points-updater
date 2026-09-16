@@ -1,5 +1,5 @@
 {
-  "name": "GS Form & Sheet Updater",
+  "name": "GS 10-points Updater",
   "description": "Ekstrakcja danych z tabeli HTML i dopisywanie do arkusza Google Sheets na Google Drive.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
