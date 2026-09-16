@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { User } from 'firebase/auth';
-import { initAuth, getAccessToken, setCachedAccessToken } from './lib/firebase';
+import { initAuth, setCachedAccessToken } from './lib/firebase';
 import { Navbar } from './components/Navbar';
 import { SheetSelector } from './components/SheetSelector';
 import { HtmlInputSection } from './components/HtmlInputSection';
@@ -8,7 +8,12 @@ import { DataPreviewTable } from './components/DataPreviewTable';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { HistorySection } from './components/HistorySection';
 import { parseHtmlTable, formatTimestamp, getExcelSerialDate } from './utils/htmlParser';
-import { appendRowsToSpreadsheet } from './services/googleSheets';
+import {
+  DEFAULT_SPREADSHEET_ID,
+  APPS_SCRIPT_STORAGE_KEY,
+  appendRowsViaAppsScript,
+  appendRowsToSpreadsheet,
+} from './services/googleSheets';
 import type { ExtractedRow, UpdateLog } from './types';
 import {
   FileSpreadsheet,
@@ -17,7 +22,7 @@ import {
   ExternalLink,
   Info,
   Sparkles,
-  RefreshCw,
+  Zap,
 } from 'lucide-react';
 
 export default function App() {
@@ -25,13 +30,14 @@ export default function App() {
   const [hasToken, setHasToken] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
-  // Target Spreadsheet State with localStorage persistence
-  const [selectedSpreadsheetId, setSelectedSpreadsheetId] = useState<string | null>(() => {
-    return typeof window !== 'undefined' ? localStorage.getItem('target_spreadsheet_id') : null;
+  // Webhook URL (for 100% public, no-login direct writes)
+  const [webhookUrl, setWebhookUrl] = useState<string>(() => {
+    return (typeof window !== 'undefined' ? localStorage.getItem(APPS_SCRIPT_STORAGE_KEY) : null) || '';
   });
-  const [selectedSpreadsheetTitle, setSelectedSpreadsheetTitle] = useState<string | null>(() => {
-    return (typeof window !== 'undefined' ? localStorage.getItem('target_spreadsheet_title') : null) || 'euro-incentive';
-  });
+
+  // Target Spreadsheet State
+  const [selectedSpreadsheetId, setSelectedSpreadsheetId] = useState<string>(DEFAULT_SPREADSHEET_ID);
+  const [selectedSpreadsheetTitle, setSelectedSpreadsheetTitle] = useState<string>('euro-incentive');
   const [selectedSheetTab, setSelectedSheetTab] = useState<string>(() => {
     return (typeof window !== 'undefined' ? localStorage.getItem('target_spreadsheet_tab') : null) || 'Arkusz1';
   });
@@ -58,7 +64,7 @@ export default function App() {
   // History logs
   const [logs, setLogs] = useState<UpdateLog[]>([]);
 
-  // Initialize Firebase Auth Listener
+  // Optional Firebase Auth Listener (only if admin wants to sign in)
   useEffect(() => {
     const unsubscribe = initAuth(
       (authUser, token) => {
@@ -79,6 +85,20 @@ export default function App() {
     setUser(newUser);
     setHasToken(!!token);
     setCachedAccessToken(token);
+  };
+
+  const handleWebhookUrlChange = (url: string) => {
+    setWebhookUrl(url);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(APPS_SCRIPT_STORAGE_KEY, url);
+    }
+  };
+
+  const handleSheetTabChange = (tab: string) => {
+    setSelectedSheetTab(tab);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('target_spreadsheet_tab', tab);
+    }
   };
 
   // Parse HTML
@@ -143,8 +163,10 @@ export default function App() {
   const handleOpenConfirm = () => {
     const selected = rows.filter((r) => r.selected);
     if (selected.length === 0) return;
-    if (!selectedSpreadsheetId) {
-      setSubmissionError('Wybierz docelowy arkusz Google przed zatwierdzeniem danych.');
+    if (!webhookUrl.trim() && !hasToken) {
+      setSubmissionError(
+        'Wprowadź i zapisz adres URL Webhooka (Google Apps Script) w sekcji powyżej, aby móc dopisywać dane do arkusza bez logowania.'
+      );
       return;
     }
     setIsConfirmModalOpen(true);
@@ -152,7 +174,6 @@ export default function App() {
 
   // Execute Append to Google Sheets after confirmation
   const handleExecuteAppend = async () => {
-    if (!selectedSpreadsheetId) return;
     const selectedRows = rows.filter((r) => r.selected);
     if (selectedRows.length === 0) return;
 
@@ -169,11 +190,25 @@ export default function App() {
         r.column5 !== undefined ? r.column5 : getExcelSerialDate(),
       ]);
 
-      await appendRowsToSpreadsheet(
-        selectedSpreadsheetId,
-        selectedSheetTab || 'Arkusz1',
-        valuesToAppend
-      );
+      if (webhookUrl.trim()) {
+        // Preferred: Direct write via Apps Script Webhook (No login needed!)
+        await appendRowsViaAppsScript(
+          webhookUrl,
+          valuesToAppend,
+          selectedSheetTab || 'Arkusz1'
+        );
+      } else if (hasToken && selectedSpreadsheetId) {
+        // Fallback: Direct OAuth
+        await appendRowsToSpreadsheet(
+          selectedSpreadsheetId,
+          selectedSheetTab || 'Arkusz1',
+          valuesToAppend
+        );
+      } else {
+        throw new Error(
+          'Brak aktywnego połączenia. Zapisz adres Webhook (Apps Script) w sekcji konfiguracji powyżej.'
+        );
+      }
 
       // Record success
       const brandCounts: Record<string, number> = {};
@@ -186,7 +221,7 @@ export default function App() {
       const newLog: UpdateLog = {
         id: `log-${Date.now()}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        spreadsheetName: selectedSpreadsheetTitle || 'euro-incentive',
+        spreadsheetName: selectedSpreadsheetTitle,
         sheetTitle: selectedSheetTab,
         rowsCount: selectedRows.length,
         totalPoints,
@@ -197,7 +232,7 @@ export default function App() {
       setLogs((prev) => [newLog, ...prev]);
       setSubmissionSuccess({
         count: selectedRows.length,
-        spreadsheetTitle: selectedSpreadsheetTitle || 'euro-incentive',
+        spreadsheetTitle: selectedSpreadsheetTitle,
         sheetTab: selectedSheetTab,
         timestamp: newLog.timestamp,
       });
@@ -211,6 +246,8 @@ export default function App() {
     }
   };
 
+  const isReadyToSubmit = Boolean(webhookUrl.trim() || hasToken);
+
   return (
     <div className="min-h-screen bg-slate-100/70 text-slate-800 flex flex-col font-sans">
       {/* Top Navigation Bar */}
@@ -218,23 +255,24 @@ export default function App() {
         user={user}
         hasToken={hasToken}
         onAuthChange={handleAuthChange}
-        targetSheetName={selectedSpreadsheetTitle || undefined}
+        isWebhookConfigured={Boolean(webhookUrl.trim())}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Intro / Instructions Banner */}
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 shadow-md border border-slate-800">
-          <div className="max-w-3xl space-y-2">
-            <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Automatyczny Updater Euro-Incentive</span>
+      {/* Main Workspace */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Intro Hero Header */}
+        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-xs relative overflow-hidden">
+          <div className="absolute right-0 top-0 w-80 h-full bg-gradient-to-l from-emerald-50/50 to-transparent pointer-events-none" />
+          <div className="max-w-3xl space-y-3 relative z-10">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100/70 text-emerald-800 border border-emerald-200">
+              <Zap className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
+              <span>Działa dla każdego użytkownika z linkiem (bez logowania)</span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-              Konwerter tabeli HTML &rarr; Google Sheets &bdquo;euro-incentive&rdquo;
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+              Aktualizacja arkusza Google &bdquo;euro-incentive&rdquo;
             </h1>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Aplikacja filtruje pozycje marek <strong>TCL, HISENSE, SAMSUNG, LG, PHILIPS, SONY, SHARP</strong>, wyodrębnia model z kolumny 1 od 3. znaku, punkty z kolumny 4, generuje bieżący znacznik czasu i umożliwia zatwierdzenie przed bezpośrednim dopisaniem do Twojego arkusza na Google Drive.
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Aplikacja filtruje pozycje marek <strong>TCL, HISENSE, SAMSUNG, LG, PHILIPS, SONY, SHARP</strong>, wyodrębnia model z kolumny 1 od 3. znaku, punkty z kolumny 4, generuje bieżący znacznik czasu i dopisuje zatwierdzone pozycje do pliku o ID: <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{DEFAULT_SPREADSHEET_ID}</span>.
             </p>
           </div>
         </div>
@@ -267,40 +305,25 @@ export default function App() {
               </div>
             </div>
 
-            {selectedSpreadsheetId && (
-              <a
-                href={`https://docs.google.com/spreadsheets/d/${selectedSpreadsheetId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-xs transition self-start sm:self-auto cursor-pointer"
-              >
-                <span>Otwórz arkusz w Google</span>
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            )}
+            <a
+              href={`https://docs.google.com/spreadsheets/d/${DEFAULT_SPREADSHEET_ID}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-xs transition self-start sm:self-auto cursor-pointer"
+            >
+              <span>Otwórz arkusz w Google</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
           </div>
         )}
 
-        {/* Step 1: Google Sheet Target Selector */}
+        {/* Step 1: Google Sheet Target Configuration (Apps Script Webhook / No login) */}
         <SheetSelector
+          webhookUrl={webhookUrl}
+          onWebhookUrlChange={handleWebhookUrlChange}
+          selectedSheetTab={selectedSheetTab}
+          onSelectSheetTab={handleSheetTabChange}
           hasToken={hasToken}
-          selectedSpreadsheetId={selectedSpreadsheetId}
-          selectedSpreadsheetTitle={selectedSpreadsheetTitle}
-          selectedSheetTitle={selectedSheetTab}
-          onSelectSpreadsheet={(id, title) => {
-            setSelectedSpreadsheetId(id);
-            setSelectedSpreadsheetTitle(title);
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('target_spreadsheet_id', id);
-              localStorage.setItem('target_spreadsheet_title', title);
-            }
-          }}
-          onSelectSheetTab={(tab) => {
-            setSelectedSheetTab(tab);
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('target_spreadsheet_tab', tab);
-            }
-          }}
         />
 
         {/* Step 2: HTML Table Input & Parser */}
@@ -322,7 +345,7 @@ export default function App() {
             onRequestConfirm={handleOpenConfirm}
             targetSpreadsheetName={selectedSpreadsheetTitle}
             targetSheetTab={selectedSheetTab}
-            hasToken={hasToken}
+            isReadyToSubmit={isReadyToSubmit}
           />
         )}
 
@@ -333,23 +356,16 @@ export default function App() {
         />
       </main>
 
-      {/* Confirmation Modal (Required for Workspace write operations) */}
+      {/* Confirmation Modal */}
       <ConfirmationModal
         isOpen={isConfirmModalOpen}
         onClose={() => setIsConfirmModalOpen(false)}
         onConfirm={handleExecuteAppend}
         isSubmitting={isSubmitting}
         rows={rows.filter((r) => r.selected)}
-        spreadsheetName={selectedSpreadsheetTitle || 'euro-incentive'}
+        spreadsheetName={selectedSpreadsheetTitle}
         sheetTab={selectedSheetTab}
       />
-
-      {/* Footer */}
-      <footer className="mt-auto py-6 border-t border-slate-200/80 text-center text-xs text-slate-500 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          GS Form &amp; Sheet Updater &bull; Bezpieczna integracja z Google Workspace API (Drive &amp; Sheets v4)
-        </div>
-      </footer>
     </div>
   );
 }

@@ -277,49 +277,135 @@ export async function createSpreadsheetWithReferenceData(
 /**
  * Searches and identifies the spreadsheet matching the attachment headers
  */
-export async function findSpreadsheetMatchingAttachment(): Promise<{
-  file: GoogleDriveFile;
-  matchReason: string;
-} | null> {
-  const token = await getAccessToken();
-  if (!token) return null;
+export const DEFAULT_SPREADSHEET_ID = '1VQP4XoYoKU2PyKV97aIp8Akg83-semTGS3HOgCBJuBo';
+export const APPS_SCRIPT_STORAGE_KEY = 'gs_10points_webhook_url';
 
-  // 1. Search for euro-incentive or incentive
-  const candidates = await searchDriveSpreadsheets('euro-incentive');
-  if (candidates.length > 0) {
-    return {
-      file: candidates[0],
-      matchReason: 'Znaleziono plik o nazwie "euro-incentive"',
-    };
+/**
+ * Appends rows via Google Apps Script Web App (Webhook).
+ * Does NOT require users to log in! The script runs as the spreadsheet owner.
+ */
+export async function appendRowsViaAppsScript(
+  webhookUrl: string,
+  rows: (string | number)[][],
+  sheetTab: string = 'Arkusz1'
+): Promise<{ success: boolean; count: number; message?: string }> {
+  const cleanUrl = webhookUrl.trim();
+  if (!cleanUrl) {
+    throw new Error('Brak skonfigurowanego adresu Webhook Google Apps Script.');
   }
 
-  const secondary = await searchDriveSpreadsheets('incentive');
-  if (secondary.length > 0) {
-    return {
-      file: secondary[0],
-      matchReason: 'Znaleziono plik zawierający "incentive"',
-    };
-  }
+  const payload = {
+    action: 'append',
+    sheetTab,
+    spreadsheetId: DEFAULT_SPREADSHEET_ID,
+    rows,
+  };
 
-  // 2. Check recent files
-  const recent = await listRecentSpreadsheets();
-  for (const file of recent.slice(0, 10)) {
-    try {
-      const sample = await getSheetValues(file.id, 'Arkusz1', 1);
-      const headers = sample.headers.map((h) => h.toLowerCase());
-      const hasTimestamp = headers.some((h) => h.includes('time') || h.includes('data') || h.includes('godzina'));
-      const hasMarka = headers.some((h) => h.includes('marka'));
-      const hasModel = headers.some((h) => h.includes('model'));
-      if ((hasTimestamp && hasMarka) || (hasMarka && hasModel)) {
-        return {
-          file,
-          matchReason: `Zgodne nagłówki: ${sample.headers.join(', ')}`,
-        };
-      }
-    } catch {
-      // Continue searching next candidate
+  try {
+    // text/plain avoids CORS preflight check for Google Apps Script Web App
+    const response = await fetch(cleanUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`Błąd serwera Apps Script: HTTP ${response.status} ${errText}`);
     }
+
+    const data = await response.json().catch(() => null);
+    if (data && data.status === 'error') {
+      throw new Error(data.error || 'Wystąpił błąd w skrypcie Google Apps Script');
+    }
+
+    return {
+      success: true,
+      count: rows.length,
+      message: data?.message,
+    };
+  } catch (err: any) {
+    console.error('Błąd wysyłania do Apps Script:', err);
+    throw new Error(err.message || 'Nie udało się połączyć ze skryptem Google Apps Script');
+  }
+}
+
+/**
+ * Tests connection with Google Apps Script Web App
+ */
+export async function testWebhookConnection(
+  webhookUrl: string
+): Promise<{ success: boolean; message: string }> {
+  const cleanUrl = webhookUrl.trim();
+  if (!cleanUrl) {
+    return { success: false, message: 'Podaj adres URL skryptu (kończy się na /exec)' };
   }
 
-  return null;
+  try {
+    const response = await fetch(cleanUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify({ action: 'ping' }),
+    });
+
+    if (!response.ok) {
+      return { success: false, message: `Błąd odpowiedzi HTTP ${response.status}` };
+    }
+
+    const data = await response.json().catch(() => null);
+    if (data?.status === 'success') {
+      return { success: true, message: data.message || 'Połączenie aktywne!' };
+    }
+    return { success: true, message: 'Otrzymano odpowiedź z serwera Apps Script' };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Nie udało się nawiązać połączenia' };
+  }
 }
+
+export const RECOMMENDED_APPS_SCRIPT_CODE = `function doPost(e) {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(15000);
+  
+  try {
+    var SPREADSHEET_ID = "1VQP4XoYoKU2PyKV97aIp8Akg83-semTGS3HOgCBJuBo";
+    var doc = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var data = JSON.parse(e.postData.contents);
+    
+    if (data.action === "ping") {
+      return ContentService.createTextOutput(JSON.stringify({ 
+        status: "success", 
+        message: "Połączenie z arkuszem aktywne!" 
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var sheetName = data.sheetTab || "Arkusz1";
+    var sheet = doc.getSheetByName(sheetName) || doc.getSheets()[0];
+    
+    if (data.rows && data.rows.length > 0) {
+      for (var i = 0; i < data.rows.length; i++) {
+        sheet.appendRow(data.rows[i]);
+      }
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: "success", 
+      count: data.rows ? data.rows.length : 0 
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: "error", 
+      error: err.toString() 
+    })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput("GS 10-points Updater Webhook is RUNNING!").setMimeType(ContentService.MimeType.TEXT);
+}`;
+

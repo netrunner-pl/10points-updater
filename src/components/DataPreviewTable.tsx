@@ -27,7 +27,7 @@ interface DataPreviewTableProps {
   onRequestConfirm: () => void;
   targetSpreadsheetName: string | null;
   targetSheetTab: string;
-  hasToken: boolean;
+  isReadyToSubmit?: boolean;
 }
 
 export function DataPreviewTable({
@@ -40,7 +40,7 @@ export function DataPreviewTable({
   onRequestConfirm,
   targetSpreadsheetName,
   targetSheetTab,
-  hasToken,
+  isReadyToSubmit = true,
 }: DataPreviewTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBrandFilter, setSelectedBrandFilter] = useState<string>('ALL');
@@ -116,7 +116,8 @@ export function DataPreviewTable({
             id="btn-request-confirmation"
             type="button"
             onClick={onRequestConfirm}
-            disabled={selectedRows.length === 0 || !hasToken}
+            disabled={selectedRows.length === 0 || !isReadyToSubmit}
+            title={!isReadyToSubmit ? 'Wprowadź i zapisz adres URL Webhooka powyżej' : undefined}
             className="inline-flex items-center space-x-2 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-semibold text-xs shadow-md shadow-emerald-700/20 transition disabled:opacity-50 cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
