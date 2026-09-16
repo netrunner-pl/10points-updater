@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { User } from 'firebase/auth';
 import { googleSignIn, logout } from '../lib/firebase';
-import { FileSpreadsheet, LogOut, CheckCircle2, ShieldCheck, Loader2 } from 'lucide-react';
+import { FileSpreadsheet, LogOut, CheckCircle2, Loader2, AlertTriangle, ExternalLink, X } from 'lucide-react';
+import firebaseConfig from '../../firebase-applet-config.json';
 
 interface NavbarProps {
   user: User | null;
@@ -10,9 +11,9 @@ interface NavbarProps {
   targetSheetName?: string;
 }
 
-export function Navbar({ user, hasToken, onAuthChange, targetSheetName }: NavbarProps) {
+export function Navbar({ user, hasToken, onAuthChange }: NavbarProps) {
   const [loading, setLoading] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<{ code?: string; message: string } | null>(null);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -22,7 +23,22 @@ export function Navbar({ user, hasToken, onAuthChange, targetSheetName }: Navbar
       onAuthChange(result.user, result.accessToken);
     } catch (err: any) {
       console.error(err);
-      setAuthError(err.message || 'Logowanie nie powiodło się');
+      const isUnauthorizedDomain =
+        err.code === 'auth/unauthorized-domain' ||
+        err.message?.includes('unauthorized-domain') ||
+        err.message?.includes('auth/unauthorized-domain');
+
+      if (isUnauthorizedDomain) {
+        setAuthError({
+          code: 'auth/unauthorized-domain',
+          message: `Domena "${typeof window !== 'undefined' ? window.location.hostname : 'github.io'}" nie jest dodana do autoryzowanych domen w Firebase Console.`,
+        });
+      } else {
+        setAuthError({
+          code: err.code,
+          message: err.message || 'Logowanie nie powiodło się',
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -122,8 +138,58 @@ export function Navbar({ user, hasToken, onAuthChange, targetSheetName }: Navbar
         </div>
       </div>
       {authError && (
-        <div className="bg-red-500/10 border-b border-red-500/20 px-4 py-1.5 text-xs text-red-300 text-center">
-          {authError}
+        <div className="bg-amber-950/80 border-b border-amber-600/40 px-4 py-3 text-xs text-amber-200">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="flex items-start space-x-2.5">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-white">
+                  {authError.code === 'auth/unauthorized-domain'
+                    ? 'Wymagana autoryzacja domeny w Firebase Console (auth/unauthorized-domain)'
+                    : 'Błąd logowania'}
+                </p>
+                <p className="text-amber-200/90 leading-relaxed">
+                  {authError.code === 'auth/unauthorized-domain' ? (
+                    <>
+                      Firebase blokuje logowanie z nieznanych domen. Aby zezwolić na logowanie z{' '}
+                      <strong className="underline text-white">
+                        {typeof window !== 'undefined' ? window.location.hostname : 'netrunner-pl.github.io'}
+                      </strong>
+                      , dodaj tę domenę do listy autoryzowanych domen w projekcie Firebase{' '}
+                      <span className="font-mono bg-black/30 px-1.5 py-0.5 rounded text-amber-300">
+                        {firebaseConfig.projectId}
+                      </span>
+                      .
+                    </>
+                  ) : (
+                    authError.message
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 shrink-0 self-end md:self-center">
+              {authError.code === 'auth/unauthorized-domain' && (
+                <a
+                  href={`https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition shadow-sm"
+                >
+                  <span>Otwórz ustawienia Firebase</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setAuthError(null)}
+                className="p-1 rounded-md text-amber-300 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                title="Zamknij"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </header>
