@@ -120,7 +120,7 @@ export function HtmlInputSection({
           <strong className="text-slate-700">Marki:</strong> TCL, HISENSE, SAMSUNG, LG, PHILIPS, SONY, SHARP
         </span>
         <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-slate-200 font-mono text-[11px]">
-          <strong className="text-slate-700">Model:</strong> Kolumna 1 od 3. znaku (np. VL<strong>50QE50LS03FA</strong>)
+          <strong className="text-slate-700">Model:</strong> Kolumna 1 od 5. znaku
         </span>
         <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-slate-200 font-mono text-[11px]">
           <strong className="text-slate-700">Punkty:</strong> Kolumna 4 (Punkty)

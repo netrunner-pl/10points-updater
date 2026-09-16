@@ -55,7 +55,7 @@ const WAREHOUSE_RT_MAP: Record<string, string> = {
 /**
  * Parses raw HTML string and extracts rows according to the specified rules:
  * - Filter only rows containing target brands: TCL, HISENSE, SAMSUNG, LG, PHILIPS, SONY, SHARP
- * - Model: Column 1 from character 3 to end (0-based slice(2))
+ * - Model: Column 1 from character 5 to end (0-based slice(4))
  * - Points: Column 4 (or header 'Punkty')
  * - Timestamp: current date and time
  */
@@ -163,11 +163,11 @@ export function parseHtmlTable(htmlContent: string): {
       continue;
     }
 
-    // Extract model: content of 1st column from 3rd character to the end (0-based index 2)
-    // E.g., VL2424HA1705E -> 2424HA1705E
+    // Extract model: content of 1st column from 5th character to the end (0-based index 4)
+    // E.g., prefixes like 'TV43' or 'VL24' are stripped so model begins at 5th character
     let model = '';
-    if (symbolText.length >= 3) {
-      model = symbolText.slice(2).trim();
+    if (symbolText.length >= 5) {
+      model = symbolText.slice(4).trim();
     } else {
       model = symbolText;
     }

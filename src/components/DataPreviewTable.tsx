@@ -251,7 +251,7 @@ export function DataPreviewTable({
               </th>
               <th className="px-3 py-3 text-left">Timestamp (Kolumna 1)</th>
               <th className="px-3 py-3 text-left">Marka produktu (Kolumna 2)</th>
-              <th className="px-3 py-3 text-left">Model (Kolumna 3, od 3. znaku)</th>
+              <th className="px-3 py-3 text-left">Model (Kolumna 3, od 5. znaku)</th>
               <th className="px-3 py-3 text-right">Ilość punktów (Kolumna 4)</th>
               <th className="px-3 py-3 text-left hidden lg:table-cell">Oryginalny opis z magazynu</th>
               <th className="w-20 px-3 py-3 text-center">Akcje</th>
