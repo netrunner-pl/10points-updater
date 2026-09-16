@@ -10,6 +10,7 @@ import { HistorySection } from './components/HistorySection';
 import { parseHtmlTable, formatTimestamp, getExcelSerialDate } from './utils/htmlParser';
 import {
   DEFAULT_SPREADSHEET_ID,
+  DEFAULT_WEBHOOK_URL,
   APPS_SCRIPT_STORAGE_KEY,
   appendRowsViaAppsScript,
   appendRowsToSpreadsheet,
@@ -32,7 +33,10 @@ export default function App() {
 
   // Webhook URL (for 100% public, no-login direct writes)
   const [webhookUrl, setWebhookUrl] = useState<string>(() => {
-    return (typeof window !== 'undefined' ? localStorage.getItem(APPS_SCRIPT_STORAGE_KEY) : null) || '';
+    return (
+      (typeof window !== 'undefined' ? localStorage.getItem(APPS_SCRIPT_STORAGE_KEY) : null) ||
+      DEFAULT_WEBHOOK_URL
+    );
   });
 
   // Target Spreadsheet State

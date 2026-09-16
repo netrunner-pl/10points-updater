@@ -278,6 +278,8 @@ export async function createSpreadsheetWithReferenceData(
  * Searches and identifies the spreadsheet matching the attachment headers
  */
 export const DEFAULT_SPREADSHEET_ID = '1VQP4XoYoKU2PyKV97aIp8Akg83-semTGS3HOgCBJuBo';
+export const DEFAULT_WEBHOOK_URL =
+  'https://script.google.com/macros/s/AKfycbysqCi07couTXITnJOddQojAOl_YFGzuuLIqB1yGZZebz7Ll39R1gMmEtpc-eAhFozN/exec';
 export const APPS_SCRIPT_STORAGE_KEY = 'gs_10points_webhook_url';
 
 /**
@@ -289,7 +291,7 @@ export async function appendRowsViaAppsScript(
   rows: (string | number)[][],
   sheetTab: string = 'Arkusz1'
 ): Promise<{ success: boolean; count: number; message?: string }> {
-  const cleanUrl = webhookUrl.trim();
+  const cleanUrl = (webhookUrl || DEFAULT_WEBHOOK_URL).trim();
   if (!cleanUrl) {
     throw new Error('Brak skonfigurowanego adresu Webhook Google Apps Script.');
   }

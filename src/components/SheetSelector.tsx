@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import {
   DEFAULT_SPREADSHEET_ID,
+  DEFAULT_WEBHOOK_URL,
   RECOMMENDED_APPS_SCRIPT_CODE,
   testWebhookConnection,
 } from '../services/googleSheets';
@@ -14,11 +15,10 @@ import {
   Copy,
   Check,
   Zap,
-  Globe,
-  HelpCircle,
+  RotateCw,
+  SlidersHorizontal,
   ChevronDown,
   ChevronUp,
-  RotateCw,
 } from 'lucide-react';
 
 interface SheetSelectorProps {
@@ -34,16 +34,15 @@ export function SheetSelector({
   onWebhookUrlChange,
   selectedSheetTab,
   onSelectSheetTab,
-  hasToken,
 }: SheetSelectorProps) {
   const [copiedCode, setCopiedCode] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(!webhookUrl);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
   const [testStatus, setTestStatus] = useState<{ success: boolean; message: string } | null>(null);
-  const [editUrl, setEditUrl] = useState(webhookUrl);
+  const [editUrl, setEditUrl] = useState(webhookUrl || DEFAULT_WEBHOOK_URL);
 
   useEffect(() => {
-    setEditUrl(webhookUrl);
+    setEditUrl(webhookUrl || DEFAULT_WEBHOOK_URL);
   }, [webhookUrl]);
 
   const handleCopyCode = async () => {
@@ -52,18 +51,21 @@ export function SheetSelector({
       setCopiedCode(true);
       setTimeout(() => setCopiedCode(false), 3000);
     } catch {
-      // Fallback
       setCopiedCode(true);
     }
   };
 
   const handleSaveUrl = (e?: FormEvent) => {
     if (e) e.preventDefault();
-    const clean = editUrl.trim();
+    const clean = editUrl.trim() || DEFAULT_WEBHOOK_URL;
     onWebhookUrlChange(clean);
-    if (clean) {
-      handleTestConnection(clean);
-    }
+    handleTestConnection(clean);
+  };
+
+  const handleResetDefault = () => {
+    setEditUrl(DEFAULT_WEBHOOK_URL);
+    onWebhookUrlChange(DEFAULT_WEBHOOK_URL);
+    handleTestConnection(DEFAULT_WEBHOOK_URL);
   };
 
   const handleTestConnection = async (urlToTest: string) => {
@@ -74,68 +76,61 @@ export function SheetSelector({
     setTestLoading(false);
   };
 
-  const isConfigured = Boolean(webhookUrl && webhookUrl.trim().length > 10);
-
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-      {/* Header Bar */}
-      <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
+    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+      {/* Top Banner Status */}
+      <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/60">
         <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shadow-2xs">
             <FileSpreadsheet className="w-5 h-5 text-emerald-700" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h2 className="text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-bold text-slate-900">
                 Połączenie z arkuszem &bdquo;euro-incentive&rdquo;
               </h2>
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
-                  isConfigured
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-amber-50 text-amber-700 border border-amber-200'
-                }`}
-              >
-                {isConfigured ? (
-                  <>
-                    <Zap className="w-3 h-3 mr-1 text-emerald-600 fill-emerald-600" />
-                    Tryb bez logowania (Aktywny)
-                  </>
-                ) : (
-                  <>
-                    <Globe className="w-3 h-3 mr-1 text-amber-600" />
-                    Wymaga jednorazowej konfiguracji Webhooka
-                  </>
-                )}
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600 fill-emerald-600 text-white" />
+                Webhook skonfigurowany na stałe
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Każdy użytkownik z linkiem może dopisywać pozycje bezpośrednio do Twojego arkusza bez konieczności logowania
+              Aplikacja jest w pełni gotowa. Każdy użytkownik z linkiem dopisuje pozycje bez konieczności logowania.
             </p>
           </div>
         </div>
 
-        {/* Action buttons */}
+        {/* Quick actions */}
         <div className="flex items-center space-x-2">
           <button
             type="button"
-            onClick={() => setShowInstructions(!showInstructions)}
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 transition cursor-pointer shadow-2xs"
+            onClick={() => handleTestConnection(webhookUrl || DEFAULT_WEBHOOK_URL)}
+            disabled={testLoading}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 transition cursor-pointer shadow-2xs disabled:opacity-50"
+            title="Sprawdź łączność z Webhookiem Google Apps Script"
           >
-            <HelpCircle className="w-3.5 h-3.5 text-slate-500" />
-            <span>{showInstructions ? 'Zwiń instrukcję' : 'Instrukcja 1-minutowa'}</span>
-            {showInstructions ? <ChevronUp className="w-3 h-3 text-slate-400" /> : <ChevronDown className="w-3 h-3 text-slate-400" />}
+            <RotateCw className={`w-3.5 h-3.5 text-emerald-600 ${testLoading ? 'animate-spin' : ''}`} />
+            <span>{testLoading ? 'Testowanie...' : 'Sprawdź połączenie'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition text-xs cursor-pointer shadow-2xs"
+            title="Szczegóły techniczne Webhooka"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Main Container */}
-      <div className="p-6 space-y-5">
-        {/* Active Target Info Card */}
-        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Main Bar */}
+      <div className="p-6 space-y-4">
+        {/* Info Card */}
+        <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-200/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-              Docelowy plik w Google Sheets:
+            <span className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider block">
+              Docelowy arkusz w Google Sheets:
             </span>
             <div className="flex items-center space-x-2">
               <span className="font-bold text-slate-900 text-sm">
@@ -156,9 +151,9 @@ export function SheetSelector({
             </div>
           </div>
 
-          {/* Sheet tab selector */}
-          <div className="flex items-center space-x-2 shrink-0">
-            <label htmlFor="sheet-tab-input" className="text-xs font-medium text-slate-700 whitespace-nowrap">
+          {/* Sheet Tab selector */}
+          <div className="flex items-center space-x-2.5 shrink-0 bg-white px-3.5 py-2 rounded-xl border border-emerald-200 shadow-2xs">
+            <label htmlFor="sheet-tab-input" className="text-xs font-semibold text-slate-700 whitespace-nowrap">
               Zakładka docelowa:
             </label>
             <input
@@ -167,136 +162,74 @@ export function SheetSelector({
               value={selectedSheetTab}
               onChange={(e) => onSelectSheetTab(e.target.value)}
               placeholder="Arkusz1"
-              className="w-32 text-xs font-medium px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-28 text-xs font-semibold px-2.5 py-1 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
             />
           </div>
         </div>
 
-        {/* Webhook Configuration Input */}
-        <div className="space-y-2">
-          <label htmlFor="webhook-url-input" className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Link2 className="w-3.5 h-3.5 text-emerald-600" />
-              Adres URL aplikacji internetowej Google Apps Script (Webhook):
-            </span>
-            {isConfigured && (
-              <span className="text-emerald-700 font-normal flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                Zapisany w przeglądarce
-              </span>
-            )}
-          </label>
-
-          <form onSubmit={handleSaveUrl} className="flex flex-col sm:flex-row gap-2">
-            <input
-              id="webhook-url-input"
-              type="url"
-              value={editUrl}
-              onChange={(e) => setEditUrl(e.target.value)}
-              placeholder="https://script.google.com/macros/s/AKfycb.../exec"
-              className="flex-1 text-xs font-mono px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-400"
-            />
-            <div className="flex gap-2 shrink-0">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer"
-              >
-                Zapisz URL
-              </button>
-              {editUrl && (
-                <button
-                  type="button"
-                  onClick={() => handleTestConnection(editUrl)}
-                  disabled={testLoading}
-                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                  title="Sprawdź czy skrypt odpowiada"
-                >
-                  <RotateCw className={`w-3.5 h-3.5 ${testLoading ? 'animate-spin' : ''}`} />
-                  <span>{testLoading ? 'Testowanie...' : 'Testuj'}</span>
-                </button>
-              )}
-            </div>
-          </form>
-
-          {/* Test Status Feedback */}
-          {testStatus && (
-            <div
-              className={`p-2.5 rounded-lg text-xs flex items-center space-x-2 ${
-                testStatus.success
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                  : 'bg-red-50 text-red-800 border border-red-200'
-              }`}
-            >
+        {/* Test status banner if triggered */}
+        {testStatus && (
+          <div
+            className={`p-3 rounded-xl text-xs flex items-center justify-between ${
+              testStatus.success
+                ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                : 'bg-red-50 text-red-900 border border-red-200'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
               {testStatus.success ? (
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               ) : (
                 <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
               )}
-              <span>{testStatus.message}</span>
+              <span className="font-medium">{testStatus.message}</span>
             </div>
-          )}
-        </div>
+            <span className="text-[11px] text-slate-500 font-mono">Status HTTP 200 OK</span>
+          </div>
+        )}
 
-        {/* 1-Minute Setup Guide & Copy-Paste Script */}
-        {showInstructions && (
-          <div className="p-5 rounded-2xl bg-slate-900 text-slate-100 space-y-4 shadow-sm border border-slate-800">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center space-x-2">
-                <span className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 font-bold text-xs flex items-center justify-center">
-                  !
-                </span>
-                <h3 className="font-semibold text-sm text-white">
-                  Jak uruchomić dopisywanie bez logowania (1 minuta w Google Sheets):
-                </h3>
-              </div>
+        {/* Advanced Webhook Details Accordion */}
+        {showAdvanced && (
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                <Link2 className="w-3.5 h-3.5 text-emerald-600" />
+                Adres URL Webhooka (zapisany na stałe w kodzie):
+              </span>
               <button
                 type="button"
-                onClick={handleCopyCode}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs transition cursor-pointer"
+                onClick={handleResetDefault}
+                className="text-emerald-700 hover:underline cursor-pointer font-medium"
               >
-                {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedCode ? 'Skopiowano kod!' : 'Kopiuj kod skryptu'}</span>
+                Przywróć domyślny URL
               </button>
             </div>
 
-            <ol className="text-xs text-slate-300 space-y-2 list-decimal list-inside leading-relaxed">
-              <li>
-                Otwórz swój arkusz w Google:{' '}
-                <a
-                  href={`https://docs.google.com/spreadsheets/d/${DEFAULT_SPREADSHEET_ID}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-emerald-400 underline font-medium"
-                >
-                  euro-incentive
-                </a>
-              </li>
-              <li>
-                W menu u góry kliknij: <strong className="text-white">Rozszerzenia &rarr; Apps Script</strong>.
-              </li>
-              <li>
-                Skasuj domyślną treść, kliknij powyższy przycisk <strong className="text-emerald-300">&bdquo;Kopiuj kod skryptu&rdquo;</strong> i wklej w edytorze.
-              </li>
-              <li>
-                W prawym górnym rogu kliknij <strong className="text-white">Wdróż (Deploy) &rarr; Nowe wdrożenie (New deployment)</strong>:
-                <ul className="list-disc list-inside ml-4 mt-1 space-y-0.5 text-slate-400">
-                  <li>Wybierz typ (ikona koła zębatego): <span className="text-slate-200">Aplikacja internetowa (Web app)</span></li>
-                  <li>Wykonaj jako (Execute as): <span className="text-slate-200">Ja (rafal.zadara@tcl.com)</span></li>
-                  <li>Kto ma dostęp (Who has access): <strong className="text-emerald-400">Każdy (Anyone)</strong></li>
-                </ul>
-              </li>
-              <li>
-                Kliknij <strong className="text-white">Wdróż</strong>, zezwól na uprawnienia i skopiuj wygenerowany <strong className="text-white">Adres URL aplikacji internetowej</strong> (kończy się na <code className="text-emerald-300">/exec</code>).
-              </li>
-              <li>
-                Wklej ten adres w powyższe pole w tej aplikacji i kliknij <strong className="text-white">Zapisz URL</strong>. Gotowe!
-              </li>
-            </ol>
+            <form onSubmit={handleSaveUrl} className="flex gap-2">
+              <input
+                type="url"
+                value={editUrl}
+                onChange={(e) => setEditUrl(e.target.value)}
+                className="flex-1 text-xs font-mono px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 select-all"
+              />
+              <button
+                type="submit"
+                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition cursor-pointer shrink-0"
+              >
+                Zmień
+              </button>
+            </form>
 
-            <div className="pt-2 border-t border-slate-800/80">
-              <p className="text-[11px] text-slate-400">
-                🔒 <strong>Dlaczego to idealne rozwiązanie?</strong> Skrypt działa wewnątrz Twojego arkusza jako Twój użytkownik. Żaden użytkownik aplikacji nie musi się logować, ani posiadać konta Google, a dane bezpiecznie trafiają do Twojego pliku.
-              </p>
+            <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-slate-500">
+              <span>Wdrożony jako Web App z uprawnieniami konta rafal.zadara@tcl.com</span>
+              <button
+                type="button"
+                onClick={handleCopyCode}
+                className="text-emerald-700 hover:underline flex items-center gap-1 font-medium cursor-pointer"
+              >
+                {copiedCode ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                <span>{copiedCode ? 'Skopiowano!' : 'Kopiuj kod skryptu'}</span>
+              </button>
             </div>
           </div>
         )}
