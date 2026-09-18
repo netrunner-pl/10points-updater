@@ -8,13 +8,12 @@ import {
   Trash2,
   Edit2,
   Plus,
-  ArrowUpDown,
   Send,
-  Sparkles,
   CheckCircle2,
   Clock,
   Layers,
   Award,
+  Lock,
 } from 'lucide-react';
 
 interface DataPreviewTableProps {
@@ -28,6 +27,7 @@ interface DataPreviewTableProps {
   targetSpreadsheetName: string | null;
   targetSheetTab: string;
   isReadyToSubmit?: boolean;
+  isLocked?: boolean;
 }
 
 export function DataPreviewTable({
@@ -41,6 +41,7 @@ export function DataPreviewTable({
   targetSpreadsheetName,
   targetSheetTab,
   isReadyToSubmit = true,
+  isLocked = false,
 }: DataPreviewTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBrandFilter, setSelectedBrandFilter] = useState<string>('ALL');
@@ -85,7 +86,9 @@ export function DataPreviewTable({
     filteredRows.length > 0 && filteredRows.every((r) => r.selected);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+    <div className={`bg-white rounded-2xl border shadow-xs overflow-hidden transition ${
+      isLocked ? 'border-emerald-300' : 'border-slate-200/80'
+    }`}>
       {/* Header bar with primary action */}
       <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4 bg-slate-50/50">
         <div>
@@ -94,39 +97,74 @@ export function DataPreviewTable({
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
               {rows.length} wyodrębnionych pozycji
             </span>
+            {isLocked && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                Zapisano w arkuszu
+              </span>
+            )}
           </h2>
           <p className="text-xs text-slate-500">
-            Sprawdź i zatwierdź modele przed zapisaniem do pliku &bdquo;{targetSpreadsheetName || 'euro-incentive'}&rdquo; ({targetSheetTab})
+            {isLocked
+              ? `Dane zostały pomyślnie wysłane do pliku „${targetSpreadsheetName || 'euro-incentive'}” (${targetSheetTab}). Ponowne wysłanie jest zablokowane.`
+              : `Sprawdź i zatwierdź modele przed zapisaniem do pliku „${targetSpreadsheetName || 'euro-incentive'}” (${targetSheetTab})`}
           </p>
         </div>
 
         {/* Big Action Button */}
         <div className="flex items-center space-x-3">
-          <button
-            id="btn-add-row"
-            type="button"
-            onClick={onAddNewRow}
-            className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition"
-          >
-            <Plus className="w-3.5 h-3.5 text-slate-500" />
-            <span>Dodaj pozycję</span>
-          </button>
+          {!isLocked && (
+            <button
+              id="btn-add-row"
+              type="button"
+              onClick={onAddNewRow}
+              className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition"
+            >
+              <Plus className="w-3.5 h-3.5 text-slate-500" />
+              <span>Dodaj pozycję</span>
+            </button>
+          )}
 
           <button
             id="btn-request-confirmation"
             type="button"
             onClick={onRequestConfirm}
-            disabled={selectedRows.length === 0 || !isReadyToSubmit}
-            title={!isReadyToSubmit ? 'Wprowadź i zapisz adres URL Webhooka powyżej' : undefined}
-            className="inline-flex items-center space-x-2 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-semibold text-xs shadow-md shadow-emerald-700/20 transition disabled:opacity-50 cursor-pointer"
+            disabled={selectedRows.length === 0 || !isReadyToSubmit || isLocked}
+            title={isLocked ? 'Dane zostały już zapisane w arkuszu' : undefined}
+            className={`inline-flex items-center space-x-2 px-5 py-2 rounded-xl font-semibold text-xs transition ${
+              isLocked
+                ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300'
+                : 'bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-md shadow-emerald-700/20 disabled:opacity-50 cursor-pointer'
+            }`}
           >
-            <Send className="w-3.5 h-3.5" />
-            <span>
-              Zatwierdź i dopisz ({selectedRows.length} {selectedRows.length === 1 ? 'wiersz' : 'wierszy'})
-            </span>
+            {isLocked ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Zapisano w arkuszu ({selectedRows.length} {selectedRows.length === 1 ? 'wiersz' : 'wierszy'})</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-3.5 h-3.5" />
+                <span>
+                  Zatwierdź i dopisz ({selectedRows.length} {selectedRows.length === 1 ? 'wiersz' : 'wierszy'})
+                </span>
+              </>
+            )}
           </button>
         </div>
       </div>
+
+      {/* Lock banner if locked */}
+      {isLocked && (
+        <div className="px-6 py-2.5 bg-emerald-50/80 border-b border-emerald-200 flex items-center justify-between text-xs text-emerald-900">
+          <div className="flex items-center space-x-2">
+            <Lock className="w-4 h-4 text-emerald-700 shrink-0" />
+            <span>
+              <strong>Blokada ponownego zapisu aktywna.</strong> Wpisy zostały już przesłane do Google Sheets. Aby rozpocząć nową sesję, przeładuj stronę.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Summary KPI Cards & Brand Distribution */}
       <div className="p-6 bg-slate-50/30 border-b border-slate-100 space-y-4">
@@ -134,7 +172,7 @@ export function DataPreviewTable({
           <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
             <span className="text-[11px] font-medium text-slate-500 flex items-center gap-1">
               <Layers className="w-3.5 h-3.5 text-slate-400" />
-              Do dopisania:
+              {isLocked ? 'Dopisano do pliku:' : 'Do dopisania:'}
             </span>
             <div className="mt-1 flex items-baseline gap-1.5">
               <span className="text-xl font-bold text-slate-800 font-mono">
@@ -217,11 +255,14 @@ export function DataPreviewTable({
         <div className="flex items-center space-x-3">
           <button
             type="button"
-            onClick={() => onToggleAll(!allFilteredSelected)}
-            className="inline-flex items-center space-x-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 cursor-pointer"
+            onClick={() => !isLocked && onToggleAll(!allFilteredSelected)}
+            disabled={isLocked}
+            className={`inline-flex items-center space-x-1.5 text-xs font-semibold ${
+              isLocked ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700 hover:text-slate-900 cursor-pointer'
+            }`}
           >
             {allFilteredSelected ? (
-              <CheckSquare className="w-4 h-4 text-emerald-600" />
+              <CheckSquare className={`w-4 h-4 ${isLocked ? 'text-slate-400' : 'text-emerald-600'}`} />
             ) : (
               <Square className="w-4 h-4 text-slate-400" />
             )}
@@ -266,7 +307,7 @@ export function DataPreviewTable({
               </tr>
             ) : (
               filteredRows.map((row) => {
-                const isEditing = editingRowId === row.id;
+                const isEditing = !isLocked && editingRowId === row.id;
 
                 return (
                   <tr
@@ -279,11 +320,12 @@ export function DataPreviewTable({
                     <td className="px-4 py-2.5 text-center">
                       <button
                         type="button"
-                        onClick={() => onToggleRow(row.id)}
-                        className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                        onClick={() => !isLocked && onToggleRow(row.id)}
+                        disabled={isLocked}
+                        className={isLocked ? 'text-slate-300 cursor-not-allowed' : 'text-slate-400 hover:text-slate-700 cursor-pointer'}
                       >
                         {row.selected ? (
-                          <CheckSquare className="w-4 h-4 text-emerald-600" />
+                          <CheckSquare className={`w-4 h-4 ${isLocked ? 'text-slate-400' : 'text-emerald-600'}`} />
                         ) : (
                           <Square className="w-4 h-4 text-slate-300" />
                         )}
@@ -372,26 +414,30 @@ export function DataPreviewTable({
 
                     {/* Actions */}
                     <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center space-x-1">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingRowId(isEditing ? null : row.id)
-                          }
-                          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-                          title={isEditing ? 'Zapisz edycję' : 'Edytuj wiersz'}
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteRow(row.id)}
-                          className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                          title="Usuń z listy"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {isLocked ? (
+                        <span className="text-slate-300 text-[11px] italic">Zablokowano</span>
+                      ) : (
+                        <div className="flex items-center justify-center space-x-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingRowId(isEditing ? null : row.id)
+                            }
+                            className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                            title={isEditing ? 'Zapisz edycję' : 'Edytuj wiersz'}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteRow(row.id)}
+                            className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                            title="Usuń z listy"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -404,7 +450,7 @@ export function DataPreviewTable({
       {/* Table Footer */}
       <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
         <div>
-          Zaznaczono <strong>{selectedRows.length}</strong> z <strong>{rows.length}</strong> wierszy (Suma punktów: <strong>{totalSelectedPoints}</strong>)
+          {isLocked ? 'Zapisano' : 'Zaznaczono'} <strong>{selectedRows.length}</strong> z <strong>{rows.length}</strong> wierszy (Suma punktów: <strong>{totalSelectedPoints}</strong>)
         </div>
         <div className="flex items-center space-x-2">
           <span>Struktura docelowa euro-incentive: [Timestamp, Marka, Model, Punkty, Column 5]</span>

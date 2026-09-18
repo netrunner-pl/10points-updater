@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
+  RotateCw,
+  Lock,
 } from 'lucide-react';
 
 export default function App() {
@@ -40,11 +42,15 @@ export default function App() {
   } | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
 
+  // Derived state: once submission succeeds, lock further uploads / submissions
+  const isLocked = Boolean(submissionSuccess);
+
   // History logs
   const [logs, setLogs] = useState<UpdateLog[]>([]);
 
   // Parse HTML
   const handleHtmlParsed = (html: string) => {
+    if (isLocked) return;
     setIsParsing(true);
     setSubmissionSuccess(null);
     setSubmissionError(null);
@@ -65,26 +71,31 @@ export default function App() {
 
   // Row operations
   const handleToggleRow = (id: string) => {
+    if (isLocked) return;
     setRows((prev) =>
       prev.map((r) => (r.id === id ? { ...r, selected: !r.selected } : r))
     );
   };
 
   const handleToggleAll = (selectAll: boolean) => {
+    if (isLocked) return;
     setRows((prev) => prev.map((r) => ({ ...r, selected: selectAll })));
   };
 
   const handleUpdateRow = (id: string, updated: Partial<ExtractedRow>) => {
+    if (isLocked) return;
     setRows((prev) =>
       prev.map((r) => (r.id === id ? { ...r, ...updated } : r))
     );
   };
 
   const handleDeleteRow = (id: string) => {
+    if (isLocked) return;
     setRows((prev) => prev.filter((r) => r.id !== id));
   };
 
   const handleAddNewRow = () => {
+    if (isLocked) return;
     const now = new Date();
     const newRow: ExtractedRow = {
       id: `manual-${Date.now()}`,
@@ -103,6 +114,7 @@ export default function App() {
 
   // Trigger confirmation modal
   const handleOpenConfirm = () => {
+    if (isLocked) return;
     const selected = rows.filter((r) => r.selected);
     if (selected.length === 0) return;
     setIsConfirmModalOpen(true);
@@ -110,6 +122,7 @@ export default function App() {
 
   // Execute Append to Google Sheets after confirmation
   const handleExecuteAppend = async () => {
+    if (isLocked) return;
     const selectedRows = rows.filter((r) => r.selected);
     if (selectedRows.length === 0) return;
 
@@ -187,30 +200,52 @@ export default function App() {
           </div>
         )}
 
-        {/* Success Toast */}
+        {/* Success Banner / Lock Status */}
         {submissionSuccess && (
-          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center space-x-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              <div className="text-xs">
-                <span className="font-semibold text-emerald-900">
-                  Dopisano {submissionSuccess.count} {submissionSuccess.count === 1 ? 'wiersz' : 'wierszy'} do arkusza
-                </span>
-                <span className="text-emerald-700 ml-2">
-                  ({submissionSuccess.timestamp})
-                </span>
+          <div className="p-5 rounded-2xl bg-emerald-50 border-2 border-emerald-300 text-emerald-950 shadow-sm space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-emerald-950">
+                    Pomyślnie dopisano {submissionSuccess.count} {submissionSuccess.count === 1 ? 'wiersz' : 'wierszy'} do arkusza!
+                  </h3>
+                  <p className="text-xs text-emerald-800 mt-0.5">
+                    Plik: <strong>&bdquo;{submissionSuccess.spreadsheetTitle}&rdquo;</strong> ({submissionSuccess.sheetTab}) &bull; Godzina: {submissionSuccess.timestamp}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                <a
+                  href={`https://docs.google.com/spreadsheets/d/${DEFAULT_SPREADSHEET_ID}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-emerald-300 bg-white hover:bg-emerald-100 text-xs font-semibold text-emerald-800 shadow-2xs transition"
+                >
+                  <span>Otwórz arkusz</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+                >
+                  <RotateCw className="w-3.5 h-3.5" />
+                  <span>Przeładuj stronę (Nowy plik)</span>
+                </button>
               </div>
             </div>
 
-            <a
-              href={`https://docs.google.com/spreadsheets/d/${DEFAULT_SPREADSHEET_ID}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center space-x-1.5 text-xs text-emerald-700 hover:text-emerald-900 font-medium underline shrink-0"
-            >
-              <span>Otwórz arkusz</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            <div className="pt-2 border-t border-emerald-200/80 flex items-center gap-2 text-xs text-emerald-900 font-medium">
+              <Lock className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+              <span>
+                Blokada ponownego zapisu jest aktywna, aby zapobiec duplikatom. Aby wgrać kolejny raport, kliknij powyższy przycisk <strong>&bdquo;Przeładuj stronę&rdquo;</strong> lub odśwież przeglądarkę (F5).
+              </span>
+            </div>
           </div>
         )}
 
@@ -219,6 +254,7 @@ export default function App() {
           onHtmlParsed={handleHtmlParsed}
           isLoading={isParsing}
           totalParsedRows={rows.length}
+          isLocked={isLocked}
         />
 
         {/* Verification, Editing & Confirmation Table */}
@@ -234,6 +270,7 @@ export default function App() {
             targetSpreadsheetName={targetSpreadsheetTitle}
             targetSheetTab={targetSheetTab}
             isReadyToSubmit={true}
+            isLocked={isLocked}
           />
         )}
 
